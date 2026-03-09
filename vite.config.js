@@ -7,5 +7,5 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: "/invoice-app/", // GitHub repository name
+  base: "/Ceylon_Multi-_Agro_Hub/", // GitHub repository name
 })
