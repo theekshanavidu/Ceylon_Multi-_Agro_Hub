@@ -211,7 +211,7 @@ export default function InvoicePage() {
 
                 {/* Table */}
                 <div className="px-6 md:px-10 py-6">
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <div className="overflow-visible rounded-xl border border-slate-200">
                         <table className="w-full text-sm min-w-[600px]">
                             <thead>
                                 <tr className="bg-gradient-to-r from-green-700 to-emerald-600 text-white">
@@ -227,22 +227,22 @@ export default function InvoicePage() {
                                     <tr key={row.id} className={`border-b border-slate-100 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}>
 
                                         {/* Description + autocomplete */}
-                                        <td className="px-4 py-2 relative">
+                                        <td className="px-4 py-2">
                                             <div className="relative">
                                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300" size={13} />
                                                 <input type="text" value={row.name}
                                                     onChange={e => handleNameChange(row.id, e.target.value)}
                                                     onFocus={e => e.target.value.trim() && handleNameChange(row.id, e.target.value)}
-                                                    onBlur={() => setTimeout(() => setSuggestions(p => ({ ...p, [row.id]: [] })), 150)}
+                                                    onBlur={() => setTimeout(() => setSuggestions(p => ({ ...p, [row.id]: [] })), 300)}
                                                     placeholder="Search item name…"
                                                     className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 bg-white" />
                                                 {suggestions[row.id]?.length > 0 && (
-                                                    <div className="absolute top-full left-0 z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-2xl max-h-52 overflow-y-auto">
+                                                    <div className="absolute top-[105%] left-0 z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden min-w-[250px]">
                                                         {suggestions[row.id].map(item => (
-                                                            <button key={item.id} onMouseDown={() => selectSuggestion(row.id, item)}
-                                                                className="w-full text-left px-4 py-2.5 hover:bg-green-50 border-b border-slate-50 last:border-0 flex items-center justify-between">
-                                                                <span className="font-semibold text-slate-800 text-sm">{item.name}</span>
-                                                                <span className="text-xs text-slate-400 font-mono ml-2">
+                                                            <button key={item.id} onMouseDown={(e) => { e.preventDefault(); selectSuggestion(row.id, item); }}
+                                                                className="w-full text-left px-4 py-2.5 hover:bg-green-50 border-b border-slate-50 last:border-0 flex items-center justify-between cursor-pointer">
+                                                                <span className="font-semibold text-slate-800 text-sm pointer-events-none">{item.name}</span>
+                                                                <span className="text-xs text-slate-400 font-mono ml-2 pointer-events-none">
                                                                     {currency === "LKR" ? `LKR ${Number(item.priceLKR).toFixed(2)}` : `USD ${Number(item.priceUSD).toFixed(4)}`}
                                                                 </span>
                                                             </button>

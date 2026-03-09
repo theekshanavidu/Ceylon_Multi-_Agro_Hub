@@ -3,6 +3,10 @@
  * Coordinates are calibrated for Ceylon Multi Agro Hub template (595.5 × 842.25 pt A4)
  */
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { templatePdf } from "../assets/templatePdf";
+import { signaturePng } from "../assets/signaturePng";
+
+const b64toUint8 = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
 const calcSub = (r) => (parseFloat(r.qty) || 0) * (parseFloat(r.price) || 0);
 
@@ -16,18 +20,7 @@ function fmtDate(dateStr) {
 
 export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote }) {
     /* ── Load template ── */
-    let tplBytes;
-    try {
-        const resp = await fetch("/template.pdf");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-        tplBytes = await resp.arrayBuffer();
-        // Validate PDF header (%PDF)
-        const header = new Uint8Array(tplBytes, 0, 4);
-        const isPDF = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46;
-        if (!isPDF) throw new Error(`Not a valid PDF (got header: ${Array.from(header).map(b => String.fromCharCode(b)).join("")})`);
-    } catch (e) {
-        throw new Error("Could not load template.pdf: " + e.message + " | bytes received: " + (tplBytes?.byteLength ?? 0));
-    }
+    const tplBytes = b64toUint8(templatePdf);
     const pdfDoc = await PDFDocument.load(tplBytes);
     const page = pdfDoc.getPages()[0];
     // page size is 595.5 × 842.25 pt (A4) — coordinates are hardcoded below
@@ -187,7 +180,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
 
     /* Signature image */
     try {
-        const sigBytes = await fetch("/signature.png").then(r => r.arrayBuffer());
+        const sigBytes = b64toUint8(signaturePng);
         const sigImg = await pdfDoc.embedPng(sigBytes);
         const dim = sigImg.scaleToFit(110, 52);
         const sigX = 390;
