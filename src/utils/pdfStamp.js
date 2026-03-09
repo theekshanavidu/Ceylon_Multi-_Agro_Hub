@@ -154,9 +154,8 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     for (let i = 0; i < dataRows.length; i++) {
         const r = dataRows[i];
 
-        // Ensure we don't bleed into the bottom logic 
-        // 90 padding handles row + spacing to prevent footer clipping
-        if (currentY - ROW_H < 90) {
+        // Maximize first page usage, only add new page if < 40 points from bottom
+        if (currentY - ROW_H < 40) {
             page = await addNewPage();
             currentY = 740; // Top of proper content area on new page
             drawTableHeader(page, currentY);
@@ -182,8 +181,8 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         page.drawLine({ start: { x: TL, y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });
     }
 
-    // Checking space for the Total row + Footer (~280pt needed minimum for lower signature)
-    if (currentY - ROW_H < 280) {
+    // Check space for the Total row
+    if (currentY - ROW_H < 40) {
         page = await addNewPage();
         currentY = 740;
     }
@@ -208,6 +207,13 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     /* ══════════════════════════════════════════════════════
        DYNAMIC FOOTER POSITIONING & SIGNATURE
     ══════════════════════════════════════════════════════ */
+    // Ensure the Bank Details and Signature (Footer Block) stay together
+    // The footer needs about 130 points of vertical space
+    if (currentY - 130 < 40) {
+        page = await addNewPage();
+        currentY = 740;
+    }
+
     currentY -= 36; // Exact 36pt (0.5 inch) gap below the table's final line
 
     // Wipe background artifacts if footer falls on a busy background zone
