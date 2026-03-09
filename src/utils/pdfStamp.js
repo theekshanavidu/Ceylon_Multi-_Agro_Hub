@@ -157,7 +157,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         // Maximize first page usage, only add new page if < 40 points from bottom
         if (currentY - ROW_H < 40) {
             page = await addNewPage();
-            currentY = 740; // Top of proper content area on new page
+            currentY = 600; // Skip letterhead on new page
             drawTableHeader(page, currentY);
             currentY -= HDR_H;
         }
@@ -184,7 +184,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     // Check space for the Total row
     if (currentY - ROW_H < 40) {
         page = await addNewPage();
-        currentY = 740;
+        currentY = 600; // Skip letterhead on new page
     }
 
     /* ══════════════════════════════════════════════════════
@@ -211,7 +211,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     // The footer needs about 130 points of vertical space
     if (currentY - 130 < 40) {
         page = await addNewPage();
-        currentY = 740;
+        currentY = 600; // Skip letterhead on new page
     }
 
     currentY -= 36; // Exact 36pt (0.5 inch) gap below the table's final line
