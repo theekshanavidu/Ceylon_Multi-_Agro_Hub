@@ -2,7 +2,7 @@ name: Deploy React App to gh-pages branch
 
 on:
   push:
-    branches: ["main"] # When you push to main branch, this runs
+    branches: ["main", "master"] # Trigger on push to main or master
   workflow_dispatch:
 
 # Grant GITHUB_TOKEN the permissions required to make a commit and push to the gh-pages branch

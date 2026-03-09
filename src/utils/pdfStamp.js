@@ -1,6 +1,6 @@
 /**
  * Shared PDF Stamping logic — stamps data onto template.pdf
- * Coordinates are calibrated for Ceylon Multi Agro Hub template (595.5 × 842.25 pt A4)
+ * Handles dynamic row heights, automatic pagination, and layout alignment.
  */
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { templatePdf } from "../assets/templatePdf";
@@ -19,26 +19,31 @@ function fmtDate(dateStr) {
 }
 
 export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote }) {
-    /* ── Load template ── */
+    /* ── Load template and preserve a pristine copy for pagination ── */
     const tplBytes = b64toUint8(templatePdf);
+    const pristineDoc = await PDFDocument.load(tplBytes);
     const pdfDoc = await PDFDocument.load(tplBytes);
-    const page = pdfDoc.getPages()[0];
-    // page size is 595.5 × 842.25 pt (A4) — coordinates are hardcoded below
+    let page = pdfDoc.getPages()[0];
 
-    /* ── Fonts ── */
+    const addNewPage = async () => {
+        const [newPage] = await pdfDoc.copyPages(pristineDoc, [0]);
+        pdfDoc.addPage(newPage);
+        return newPage;
+    };
+
+    /* ── Fonts and Colors ── */
     const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     const fontB = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
-    /* ── Colors ── */
     const GREEN = rgb(0.10, 0.28, 0.10);
     const BLACK = rgb(0, 0, 0);
     const WHITE = rgb(1, 1, 1);
     const GRAY = rgb(0.35, 0.35, 0.35);
 
-    /* ── Helpers ── */
-    const draw = (text, x, y, { size = 10, bold = false, color = BLACK, maxWidth } = {}) => {
+    /* ── Drawing Helpers ── */
+    const draw = (p, text, x, y, { size = 10, bold = false, color = BLACK, maxWidth } = {}) => {
         if (!text && text !== 0) return;
-        page.drawText(String(text), {
+        p.drawText(String(text), {
             x, y, size,
             font: bold ? fontB : font,
             color,
@@ -46,153 +51,208 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         });
     };
 
-    const cAlign = (text, lx, cw, y, opts = {}) => {
+    const cAlign = (p, text, lx, cw, y, opts = {}) => {
         const f = opts.bold ? fontB : font;
         const w = f.widthOfTextAtSize(String(text), opts.size || 10);
-        draw(text, lx + (cw - w) / 2, y, opts);
+        draw(p, text, lx + (cw - w) / 2, y, opts);
     };
 
     /* ══════════════════════════════════════════════════════
-       INVOICE HEADER  (below the letterhead graphic)
-       Template letterhead ends ~y=722 from bottom.
-       Contact icons on right start ~y=680.
-       "INVOICE" in sample is at top-left → approx y=640
+       MARGINS AND ALIGNMENT
     ══════════════════════════════════════════════════════ */
-    const HDR_Y = 636;
+    // 0.5-inch margin = exactly 36 points in PDF coordinate space
+    const LEFT_MARGIN = 36;
 
-    draw("INVOICE", 35, HDR_Y, { size: 14, bold: true });
-
-    // "Issued to:" line — wraps if long
-    draw(`Issued to: ${issuedTo || ""}`, 35, HDR_Y - 20, {
-        size: 10, maxWidth: 240,
-    });
-
-    draw(`Issued date: ${fmtDate(date)}`, 35, HDR_Y - 36, { size: 10 });
+    // Overall table width (from 36 up to 560 for a 524pt wide table)
+    const TL = LEFT_MARGIN, TR = 560, TW = TR - TL;
+    const W_DESC = 210, W_QTY = 90, W_PRICE = 112, W_SUB = 112;
+    const COL_X = [TL, TL + W_DESC, TL + W_DESC + W_QTY, TL + W_DESC + W_QTY + W_PRICE];
+    const COL_WIDTHS = [W_DESC, W_QTY, W_PRICE, W_SUB];
 
     /* ══════════════════════════════════════════════════════
-       TABLE
-       From sample analysis:
-         Outer border: x=35..560, top y≈552, columns dividers at x=235,335,450
-         Header height: 40pt
-         Row height:    38pt
-         5 data rows + 1 total row minimum
+       HEADER FORMATTING (Page 1)
     ══════════════════════════════════════════════════════ */
-    const TL = 35, TR = 560, TW = TR - TL;
-    const COL_X = [35, 235, 335, 450];
-    const COL_W = [200, 100, 115, 110];
-
-    const TBL_TOP = 552;
-    const HDR_H = 40;
-    const ROW_H = 38;
-    const BORDER = 0.8;
-
-    const dataRows = (rows || []).filter(r => r.name || r.qty || r.price);
-    const numRows = Math.max(dataRows.length, 5);  // pad to minimum 5 like sample
-    const TBL_H = HDR_H + numRows * ROW_H + ROW_H; // +1 total row
-    const TBL_BOT = TBL_TOP - TBL_H;
-
-    /* Outer rect (white fill to cover template white area) */
-    page.drawRectangle({
-        x: TL, y: TBL_BOT,
-        width: TW, height: TBL_H,
-        color: WHITE, borderColor: GREEN, borderWidth: BORDER,
-    });
-
-    /* Header row */
-    const HDR_BOT = TBL_TOP - HDR_H;
-    page.drawRectangle({
-        x: TL, y: HDR_BOT,
-        width: TW, height: HDR_H,
-        color: WHITE, borderColor: GREEN, borderWidth: BORDER,
-    });
-
-    /* Header 2-line text */
-    const hY1 = HDR_BOT + 24; // upper line
-    const hY2 = HDR_BOT + 10; // lower line
-    cAlign("DESCRIPTION", COL_X[0], COL_W[0], hY1, { size: 10, bold: true });
-    cAlign("QTY/KG", COL_X[1], COL_W[1], hY1, { size: 10, bold: true });
-    cAlign("PRICE", COL_X[2], COL_W[2], hY1, { size: 10, bold: true });
-    cAlign(`${currency}/KG`, COL_X[2], COL_W[2], hY2, { size: 10, bold: true });
-    cAlign("SUBTOTAL", COL_X[3], COL_W[3], hY1, { size: 10, bold: true });
-    cAlign(currency, COL_X[3], COL_W[3], hY2, { size: 10, bold: true });
-
-    /* Vertical column dividers */
-    [COL_X[1], COL_X[2], COL_X[3]].forEach(x => {
-        page.drawLine({
-            start: { x, y: TBL_BOT },
-            end: { x, y: TBL_TOP },
-            thickness: BORDER, color: GREEN,
-        });
-    });
-
-    /* Data rows */
-    let rowY = HDR_BOT - ROW_H;
-    const padded = [...dataRows];
-    while (padded.length < numRows) padded.push({ name: "", qty: "", price: "" });
-
-    padded.forEach((r) => {
-        page.drawLine({
-            start: { x: TL, y: rowY + ROW_H }, end: { x: TR, y: rowY + ROW_H },
-            thickness: 0.5, color: rgb(0.7, 0.7, 0.7),
-        });
-
-        const ty = rowY + 13; // text baseline inside row
-
-        if (r.name) cAlign(r.name.toUpperCase(), COL_X[0], COL_W[0], ty, { size: 10 });
-        if (r.qty) cAlign(String(parseFloat(r.qty)), COL_X[1], COL_W[1], ty, { size: 10 });
-        if (r.price !== "" && r.price !== undefined && r.price !== null) {
-            cAlign(parseFloat(r.price).toFixed(2), COL_X[2], COL_W[2], ty, { size: 10 });
-        }
-        const sub = calcSub(r);
-        if (sub > 0) cAlign(sub.toFixed(2), COL_X[3], COL_W[3], ty, { size: 10 });
-
-        rowY -= ROW_H;
-    });
-
-    /* TOTAL row */
-    page.drawLine({
-        start: { x: TL, y: rowY + ROW_H }, end: { x: TR, y: rowY + ROW_H },
-        thickness: BORDER, color: GREEN,
-    });
-    const totalY = rowY + 13;
-    cAlign("TOTAL", COL_X[2], COL_W[2], totalY, { size: 10, bold: true });
-    cAlign(`${(grandTotal || 0).toFixed(2)} ${currency}`, COL_X[3], COL_W[3], totalY, { size: 10, bold: true });
-
-    /* ══════════════════════════════════════════════════════
-       FOOTER — Bank details (bottom-left) + Signature (right)
-       Template has a footer separator line at ~y=175.
-       Bank text: x=35, starting y=162
-       Signature: x≈390, y≈140
-    ══════════════════════════════════════════════════════ */
-    const FY = 162;
-
-    draw("Bank Account:", 35, FY, { size: 10, bold: true });
-    draw("273200140055470", 35, FY - 15, { size: 10 });
-    draw("R. M. C. M Rathnayaka", 35, FY - 29, { size: 10 });
-    draw("People's Bank", 35, FY - 43, { size: 10 });
-    draw("Kadawatha Branch", 35, FY - 57, { size: 10 });
-
-    if (invoiceNote && invoiceNote.trim()) {
-        draw("Note: " + invoiceNote.trim(), 35, FY - 74, {
-            size: 8.5, color: GRAY, maxWidth: 220,
-        });
+    let customerName = issuedTo || "";
+    let customerAddress = "";
+    if (customerName.includes("-")) {
+        const parts = customerName.split("-");
+        customerName = parts[0].trim();
+        customerAddress = parts.slice(1).join("-").trim();
+    } else {
+        customerAddress = ""; // Empty if no dash present
     }
 
-    /* Signature image */
+    // Move the entire header block further up to provide more space
+    const HDR_Y = 710;
+
+    // Line 1: "INVOICE" (Bold, Font Size: 18)
+    draw(page, "INVOICE", LEFT_MARGIN, HDR_Y, { size: 18, bold: true });
+
+    // Line 2: "Issued to: [Customer Name]"
+    draw(page, `Issued to: ${customerName}`, LEFT_MARGIN, HDR_Y - 25, { size: 10, maxWidth: 240 });
+
+    // Line 3 & 4
+    let dateY = HDR_Y - 40;
+    if (customerAddress) {
+        // Line 3 exists, print Address
+        draw(page, customerAddress, LEFT_MARGIN, HDR_Y - 40, { size: 10, maxWidth: 240 });
+        dateY = HDR_Y - 55; // Push date to Line 4
+    }
+
+    // Line 4 (or 3 if no address): "Issued date: [Date]"
+    draw(page, `Issued date: ${fmtDate(date)}`, LEFT_MARGIN, dateY, { size: 10 });
+
+    /* ══════════════════════════════════════════════════════
+       TABLE MEASUREMENTS & DYNAMIC GRID
+    ══════════════════════════════════════════════════════ */
+    const HDR_H = 35;
+    const ROW_H = 25; // Consistent 25 unit row height
+    const BORDER = 2.0; // Exactly 2.0 thickness for all grid lines
+
+    let dataRows = (rows || []).filter(r => r.name || r.qty || r.price);
+    if (dataRows.length === 0) dataRows.push({ name: "", qty: "", price: "" });
+
+    let currentY = dateY - 30; // Start table dynamically below header
+
+    const fillRowBackground = (p, topY, height) => {
+        p.drawRectangle({ x: TL, y: topY - height, width: TW, height: height, color: WHITE });
+    };
+
+    const drawVerticalGridLines = (p, topY, botY) => {
+        // Outer vertical edges
+        p.drawLine({ start: { x: TL, y: topY }, end: { x: TL, y: botY }, thickness: BORDER, color: GREEN });
+        p.drawLine({ start: { x: TR, y: topY }, end: { x: TR, y: botY }, thickness: BORDER, color: GREEN });
+        // Inner vertical dividers
+        p.drawLine({ start: { x: COL_X[1], y: topY }, end: { x: COL_X[1], y: botY }, thickness: BORDER, color: GREEN });
+        p.drawLine({ start: { x: COL_X[2], y: topY }, end: { x: COL_X[2], y: botY }, thickness: BORDER, color: GREEN });
+        p.drawLine({ start: { x: COL_X[3], y: topY }, end: { x: COL_X[3], y: botY }, thickness: BORDER, color: GREEN });
+    };
+
+    const drawTableHeader = (p, topY) => {
+        fillRowBackground(p, topY, HDR_H);
+
+        const hY1 = topY - 14;
+        const hY2 = topY - 26;
+        cAlign(p, "DESCRIPTION", COL_X[0], COL_WIDTHS[0], hY1, { size: 10, bold: true });
+        cAlign(p, "QTY/KG", COL_X[1], COL_WIDTHS[1], hY1, { size: 10, bold: true });
+        cAlign(p, "PRICE", COL_X[2], COL_WIDTHS[2], hY1, { size: 10, bold: true });
+        cAlign(p, `${currency}/KG`, COL_X[2], COL_WIDTHS[2], hY2, { size: 10, bold: true });
+        cAlign(p, "SUBTOTAL", COL_X[3], COL_WIDTHS[3], hY1, { size: 10, bold: true });
+        cAlign(p, currency, COL_X[3], COL_WIDTHS[3], hY2, { size: 10, bold: true });
+
+        // Solid horizontal line BEFORE header
+        p.drawLine({ start: { x: TL, y: topY }, end: { x: TR, y: topY }, thickness: BORDER, color: GREEN });
+        // Solid horizontal line AFTER header, clearly separating it from data
+        p.drawLine({ start: { x: TL, y: topY - HDR_H }, end: { x: TR, y: topY - HDR_H }, thickness: BORDER, color: GREEN });
+
+        drawVerticalGridLines(p, topY, topY - HDR_H);
+    };
+
+    drawTableHeader(page, currentY);
+    currentY -= HDR_H;
+
+    for (let i = 0; i < dataRows.length; i++) {
+        const r = dataRows[i];
+
+        // Ensure we don't bleed into the bottom logic 
+        // 90 padding handles row + spacing to prevent footer clipping
+        if (currentY - ROW_H < 90) {
+            page = await addNewPage();
+            currentY = 740; // Top of proper content area on new page
+            drawTableHeader(page, currentY);
+            currentY -= HDR_H;
+        }
+
+        fillRowBackground(page, currentY, ROW_H);
+
+        const textY = currentY - 17; // Align correctly in the 25 unit space
+        if (r.name) cAlign(page, r.name.toUpperCase(), COL_X[0], COL_WIDTHS[0], textY, { size: 10 });
+        if (r.qty) cAlign(page, String(parseFloat(r.qty)), COL_X[1], COL_WIDTHS[1], textY, { size: 10 });
+        if (r.price !== "" && r.price !== undefined && r.price !== null) {
+            cAlign(page, parseFloat(r.price).toFixed(2), COL_X[2], COL_WIDTHS[2], textY, { size: 10 });
+        }
+        const sub = calcSub(r);
+        if (sub > 0) cAlign(page, sub.toFixed(2), COL_X[3], COL_WIDTHS[3], textY, { size: 10 });
+
+        // Make vertical columns
+        drawVerticalGridLines(page, currentY, currentY - ROW_H);
+
+        currentY -= ROW_H;
+        // Solid horizontal line after every single item row to separate them clearly
+        page.drawLine({ start: { x: TL, y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });
+    }
+
+    // Checking space for the Total row + Footer (~280pt needed minimum for lower signature)
+    if (currentY - ROW_H < 280) {
+        page = await addNewPage();
+        currentY = 740;
+    }
+
+    /* ══════════════════════════════════════════════════════
+       TOTAL ROW
+    ══════════════════════════════════════════════════════ */
+    fillRowBackground(page, currentY, ROW_H);
+    const totalY = currentY - 17;
+    cAlign(page, "TOTAL", COL_X[2], COL_WIDTHS[2], totalY, { size: 10, bold: true });
+    cAlign(page, `${(grandTotal || 0).toFixed(2)} ${currency}`, COL_X[3], COL_WIDTHS[3], totalY, { size: 10, bold: true });
+
+    // Vertical columns for Total block
+    page.drawLine({ start: { x: TL, y: currentY }, end: { x: TL, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+    page.drawLine({ start: { x: TR, y: currentY }, end: { x: TR, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+    page.drawLine({ start: { x: COL_X[2], y: currentY }, end: { x: COL_X[2], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+    page.drawLine({ start: { x: COL_X[3], y: currentY }, end: { x: COL_X[3], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+
+    currentY -= ROW_H;
+    page.drawLine({ start: { x: TL, y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });
+
+    /* ══════════════════════════════════════════════════════
+       DYNAMIC FOOTER POSITIONING & SIGNATURE
+    ══════════════════════════════════════════════════════ */
+    currentY -= 36; // Exact 36pt (0.5 inch) gap below the table's final line
+
+    // Wipe background artifacts if footer falls on a busy background zone
+    page.drawRectangle({ x: LEFT_MARGIN, y: currentY - 100, width: 250, height: 115, color: WHITE });
+
+    draw(page, "Bank Account:", LEFT_MARGIN, currentY, { size: 10, bold: true });
+    draw(page, "Company Name: CEYLON MULTI AGRO HUB (PVT) LTD", LEFT_MARGIN, currentY - 15, { size: 10 });
+    draw(page, "Bank: BOC Bank", LEFT_MARGIN, currentY - 29, { size: 10 });
+    draw(page, "Branch: Kadawatha", LEFT_MARGIN, currentY - 43, { size: 10 });
+    draw(page, "Account Type: Current Account", LEFT_MARGIN, currentY - 57, { size: 10 });
+    draw(page, "Account Number: 96015470", LEFT_MARGIN, currentY - 71, { size: 10 });
+
+    let finalBankY = currentY - 71;
+    if (invoiceNote && invoiceNote.trim()) {
+        draw(page, "Note: " + invoiceNote.trim(), LEFT_MARGIN, currentY - 92, { size: 8.5, color: GRAY, maxWidth: 220 });
+        finalBankY = currentY - 92;
+    }
+
+    /* Signature Image */
     try {
         const sigBytes = b64toUint8(signaturePng);
         const sigImg = await pdfDoc.embedPng(sigBytes);
         const dim = sigImg.scaleToFit(110, 52);
-        const sigX = 390;
-        const sigImgY = FY - 5;
+
+        // Aligning explicitly on the right (TR coordinate)
+        const sigX = TR - dim.width - 20;
+        // Raised signature by another 0.5 inches (total 108 points from base)
+        const sigImgY = finalBankY - 36 - dim.height + 108;
+
+        page.drawRectangle({ x: sigX - 10, y: sigImgY - 20, width: dim.width + 20, height: dim.height + 40, color: WHITE }); // hide template artifacts
         page.drawImage(sigImg, { x: sigX, y: sigImgY, width: dim.width, height: dim.height });
 
         const mdText = "Managing Director";
         const mdW = fontB.widthOfTextAtSize(mdText, 10);
-        draw(mdText, sigX + (dim.width - mdW) / 2, sigImgY - 14, { size: 10, bold: true });
+
+        // Centered directly below the signature image
+        draw(page, mdText, sigX + (dim.width - mdW) / 2, sigImgY - 14, { size: 10, bold: true });
     } catch {
-        draw("Managing Director", 395, FY - 14, { size: 10, bold: true });
+        const mdText = "Managing Director";
+        const mdW = fontB.widthOfTextAtSize(mdText, 10);
+        const backupX = TR - mdW - 40;
+
+        draw(page, mdText, backupX, finalBankY - 36 - 10 + 108, { size: 10, bold: true });
     }
 
+    /* Return generated raw bytes */
     return pdfDoc.save();
 }
