@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --sidebar-bg: #1a1f2e;
+  --sidebar-accent: #2d6a4f;
+  --sidebar-text: #e2e8f0;
+  --primary: #2d6a4f;
+  --primary-hover: #1b4332;
+  --accent: #52b788;
+  --bg: #f0f4f8;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+}
+
+* {
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+
+/* Print / PDF preview styles */
+@media print {
+  .no-print { display: none !important; }
+  .invoice-preview { box-shadow: none !important; }
+}
