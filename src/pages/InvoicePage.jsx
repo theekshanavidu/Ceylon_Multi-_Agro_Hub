@@ -59,9 +59,7 @@ export default function InvoicePage() {
         }));
         setSuggestions(prev => ({
             ...prev,
-            [rowId]: value.trim().length > 0
-                ? allItems.filter(i => i.name.toLowerCase().includes(value.toLowerCase()))
-                : [],
+            [rowId]: allItems.filter(i => i.name.toLowerCase().includes(value.toLowerCase())),
         }));
     };
 
@@ -213,7 +211,7 @@ export default function InvoicePage() {
 
                 {/* Table */}
                 <div className="px-6 md:px-10 py-6">
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <div className="rounded-xl border border-slate-200">
                         <table className="w-full text-sm min-w-[600px]">
                             <thead>
                                 <tr className="bg-gradient-to-r from-green-700 to-emerald-600 text-white">
@@ -234,12 +232,13 @@ export default function InvoicePage() {
                                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300" size={13} />
                                                 <input type="text" value={row.name}
                                                     onChange={e => handleNameChange(row.id, e.target.value)}
-                                                    onFocus={e => e.target.value.trim() && handleNameChange(row.id, e.target.value)}
+                                                    onFocus={e => handleNameChange(row.id, e.target.value)}
                                                     onBlur={() => setTimeout(() => setSuggestions(p => ({ ...p, [row.id]: [] })), 300)}
                                                     placeholder="Search item name…"
+                                                    autoComplete="off"
                                                     className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 bg-white" />
                                                 {suggestions[row.id]?.length > 0 && (
-                                                    <div className="absolute top-[105%] left-0 z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden min-w-[250px]">
+                                                    <div className="absolute top-[105%] left-0 z-[100] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-2xl overflow-y-auto max-h-60 min-w-[250px]">
                                                         {suggestions[row.id].map(item => (
                                                             <button key={item.id} onMouseDown={(e) => { e.preventDefault(); selectSuggestion(row.id, item); }}
                                                                 className="w-full text-left px-4 py-2.5 hover:bg-green-50 border-b border-slate-50 last:border-0 flex items-center justify-between cursor-pointer">
