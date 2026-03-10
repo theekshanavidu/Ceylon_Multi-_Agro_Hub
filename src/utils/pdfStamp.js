@@ -154,29 +154,51 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     for (let i = 0; i < dataRows.length; i++) {
         const r = dataRows[i];
 
+        const descLines = (() => {
+            const text = r.name ? r.name.toUpperCase() : "";
+            if (!text) return [];
+            const words = String(text).split(" ");
+            let lst = [], cur = "";
+            for (let w of words) {
+                const test = cur ? `${cur} ${w}` : w;
+                if (font.widthOfTextAtSize(test, 10) > COL_WIDTHS[0] - 10 && cur) {
+                    lst.push(cur);
+                    cur = w;
+                } else cur = test;
+            }
+            if (cur) lst.push(cur);
+            return lst;
+        })();
+
+        const currentDynamicRowH = Math.max(ROW_H, descLines.length * 12 + 10);
+
         // Maximize first page usage, only add new page if < 40 points from bottom
-        if (currentY - ROW_H < 40) {
+        if (currentY - currentDynamicRowH < 40) {
             page = await addNewPage();
             currentY = 600; // Skip letterhead on new page
             drawTableHeader(page, currentY);
             currentY -= HDR_H;
         }
 
-        fillRowBackground(page, currentY, ROW_H);
+        fillRowBackground(page, currentY, currentDynamicRowH);
 
-        const textY = currentY - 17; // Align correctly in the 25 unit space
-        if (r.name) cAlign(page, r.name.toUpperCase(), COL_X[0], COL_WIDTHS[0], textY, { size: 10 });
-        if (r.qty) cAlign(page, String(parseFloat(r.qty)), COL_X[1], COL_WIDTHS[1], textY, { size: 10 });
+        const blockTopY = currentY - (currentDynamicRowH - (descLines.length * 12)) / 2 - 10.5;
+        descLines.forEach((lineText, idx) => {
+            cAlign(page, lineText, COL_X[0], COL_WIDTHS[0], blockTopY - idx * 12, { size: 10 });
+        });
+
+        const singleLineTextY = currentY - currentDynamicRowH / 2 - 4.5;
+        if (r.qty) cAlign(page, String(parseFloat(r.qty)), COL_X[1], COL_WIDTHS[1], singleLineTextY, { size: 10 });
         if (r.price !== "" && r.price !== undefined && r.price !== null) {
-            cAlign(page, parseFloat(r.price).toFixed(2), COL_X[2], COL_WIDTHS[2], textY, { size: 10 });
+            cAlign(page, parseFloat(r.price).toFixed(2), COL_X[2], COL_WIDTHS[2], singleLineTextY, { size: 10 });
         }
         const sub = calcSub(r);
-        if (sub > 0) cAlign(page, sub.toFixed(2), COL_X[3], COL_WIDTHS[3], textY, { size: 10 });
+        if (sub > 0) cAlign(page, sub.toFixed(2), COL_X[3], COL_WIDTHS[3], singleLineTextY, { size: 10 });
 
         // Make vertical columns
-        drawVerticalGridLines(page, currentY, currentY - ROW_H);
+        drawVerticalGridLines(page, currentY, currentY - currentDynamicRowH);
 
-        currentY -= ROW_H;
+        currentY -= currentDynamicRowH;
         // Solid horizontal line after every single item row to separate them clearly
         page.drawLine({ start: { x: TL, y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });
     }
