@@ -18,7 +18,7 @@ function fmtDate(dateStr) {
     return `${day}${s} ${now.toLocaleDateString("en-GB", { month: "long" })} ${now.getFullYear()}`;
 }
 
-export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote }) {
+export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote, includeBank = true }) {
     /* ── Load template and preserve a pristine copy for pagination ── */
     const tplBytes = b64toUint8(templatePdf);
     const pristineDoc = await PDFDocument.load(tplBytes);
@@ -217,19 +217,28 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     currentY -= 36; // Exact 36pt (0.5 inch) gap below the table's final line
 
     // Wipe background artifacts if footer falls on a busy background zone
-    page.drawRectangle({ x: LEFT_MARGIN, y: currentY - 100, width: 250, height: 115, color: WHITE });
+    page.drawRectangle({ x: LEFT_MARGIN, y: currentY - 140, width: 320, height: 155, color: WHITE });
 
-    draw(page, "Bank Account:", LEFT_MARGIN, currentY, { size: 10, bold: true });
-    draw(page, "Company Name: CEYLON MULTI AGRO HUB (PVT) LTD", LEFT_MARGIN, currentY - 15, { size: 10 });
-    draw(page, "Bank: BOC Bank", LEFT_MARGIN, currentY - 29, { size: 10 });
-    draw(page, "Branch: Kadawatha", LEFT_MARGIN, currentY - 43, { size: 10 });
-    draw(page, "Account Type: Current Account", LEFT_MARGIN, currentY - 57, { size: 10 });
-    draw(page, "Account Number: 96015470", LEFT_MARGIN, currentY - 71, { size: 10 });
+    let blockY = currentY;
 
-    let finalBankY = currentY - 71;
+    // Draw Note (if any) first, larger and clearer.
     if (invoiceNote && invoiceNote.trim()) {
-        draw(page, "Note: " + invoiceNote.trim(), LEFT_MARGIN, currentY - 92, { size: 8.5, color: GRAY, maxWidth: 220 });
-        finalBankY = currentY - 92;
+        draw(page, "Note:", LEFT_MARGIN, blockY, { size: 10, bold: true, color: BLACK });
+        blockY -= 14;
+        draw(page, invoiceNote.trim(), LEFT_MARGIN, blockY, { size: 10, color: BLACK, maxWidth: 300 });
+        // estimate height used
+        const estimatedLines = Math.max(1, Math.ceil(font.widthOfTextAtSize(invoiceNote.trim(), 10) / 300));
+        blockY -= (estimatedLines * 14) + 10;
+    }
+
+    if (includeBank) {
+        draw(page, "Bank Account:", LEFT_MARGIN, blockY, { size: 10, bold: true });
+        draw(page, "Company Name: CEYLON MULTI AGRO HUB (PVT) LTD", LEFT_MARGIN, blockY - 15, { size: 10 });
+        draw(page, "Bank: BOC Bank", LEFT_MARGIN, blockY - 29, { size: 10 });
+        draw(page, "Branch: Kadawatha", LEFT_MARGIN, blockY - 43, { size: 10 });
+        draw(page, "Account Type: Current Account", LEFT_MARGIN, blockY - 57, { size: 10 });
+        draw(page, "Account Number: 96015470", LEFT_MARGIN, blockY - 71, { size: 10 });
+        blockY -= 71;
     }
 
     /* Signature Image */
@@ -240,8 +249,9 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
 
         // Aligning explicitly on the right (TR coordinate)
         const sigX = TR - dim.width - 20;
-        // Raised signature by another 0.5 inches (total 108 points from base)
-        const sigImgY = finalBankY - 36 - dim.height + 108;
+
+        // Align top of the signature image roughly with the top of the block (currentY)
+        const sigImgY = currentY - dim.height - 5;
 
         page.drawRectangle({ x: sigX - 10, y: sigImgY - 20, width: dim.width + 20, height: dim.height + 40, color: WHITE }); // hide template artifacts
         page.drawImage(sigImg, { x: sigX, y: sigImgY, width: dim.width, height: dim.height });
@@ -256,7 +266,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         const mdW = fontB.widthOfTextAtSize(mdText, 10);
         const backupX = TR - mdW - 40;
 
-        draw(page, mdText, backupX, finalBankY - 36 - 10 + 108, { size: 10, bold: true });
+        draw(page, mdText, backupX, currentY - 50, { size: 10, bold: true });
     }
 
     /* Return generated raw bytes */

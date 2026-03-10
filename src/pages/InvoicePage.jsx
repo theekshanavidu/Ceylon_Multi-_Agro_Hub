@@ -5,9 +5,10 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { stampPDF } from "../utils/pdfStamp";
+import { signaturePng } from "../assets/signaturePng";
 import {
     Plus, Download, FileText, Search, X,
-    Loader2, DollarSign, Save, CheckCircle, AlertCircle,
+    Loader2, DollarSign, Save, CheckCircle, AlertCircle, Building,
 } from "lucide-react";
 
 /* ─────────── helpers ─────────── */
@@ -16,7 +17,7 @@ function todayDisplay() {
         day: "2-digit", month: "long", year: "numeric",
     });
 }
-const emptyRow = () => ({ id: crypto.randomUUID(), name: "", qty: "", price: "" });
+const emptyRow = () => ({ id: crypto.randomUUID(), name: "", qty: "1", price: "" });
 const calcSub = (r) => (parseFloat(r.qty) || 0) * (parseFloat(r.price) || 0);
 
 /* ─────────── Component ─────────── */
@@ -31,6 +32,7 @@ export default function InvoicePage() {
     const [saveBusy, setSaveBusy] = useState(false);
     const [saveStatus, setSaveStatus] = useState(null);
     const [invoiceNote, setInvoiceNote] = useState("");
+    const [includeBank, setIncludeBank] = useState(true);
 
     /* Load items */
     useEffect(() => {
@@ -108,7 +110,7 @@ export default function InvoicePage() {
     const handleExportPDF = async () => {
         setPdfBusy(true);
         try {
-            const bytes = await stampPDF({ issuedTo, currency, rows, grandTotal, invoiceNote });
+            const bytes = await stampPDF({ issuedTo, currency, rows, grandTotal, invoiceNote, includeBank });
             const blob = new Blob([bytes], { type: "application/pdf" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -211,7 +213,7 @@ export default function InvoicePage() {
 
                 {/* Table */}
                 <div className="px-6 md:px-10 py-6">
-                    <div className="overflow-visible rounded-xl border border-slate-200">
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
                         <table className="w-full text-sm min-w-[600px]">
                             <thead>
                                 <tr className="bg-gradient-to-r from-green-700 to-emerald-600 text-white">
@@ -298,13 +300,25 @@ export default function InvoicePage() {
                 <div className="px-6 md:px-10 pt-4 pb-8 border-t border-slate-100 bg-slate-50">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
                         <div>
-                            <h3 className="text-xs font-bold text-green-700 uppercase tracking-widest mb-3">Bank Account</h3>
-                            <div className="space-y-1 text-sm text-slate-700">
-                                {["273200140055470", "R. M. C. M Rathnayaka", "People's Bank", "Kadawatha Branch"].map(v => (
-                                    <p key={v} className="font-medium">{v}</p>
-                                ))}
+                            <div className="flex items-center gap-2 mb-3">
+                                <h3 className="text-xs font-bold text-green-700 uppercase tracking-widest flex items-center gap-1"><Building size={14} /> Bank Account</h3>
+                                <label className="flex items-center gap-1.5 ml-4 text-xs font-semibold text-slate-600 bg-white px-2 py-1 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={includeBank} onChange={e => setIncludeBank(e.target.checked)} className="accent-green-600 rounded-sm" />
+                                    Include in PDF
+                                </label>
                             </div>
-                            <div className="mt-4">
+
+                            {includeBank ? (
+                                <div className="space-y-1 text-sm text-slate-700 mb-4 p-3 bg-white border border-slate-200 rounded-lg">
+                                    {["Company Name: CEYLON MULTI AGRO HUB (PVT) LTD", "Bank: BOC Bank", "Branch: Kadawatha", "Account Type: Current Account", "Account Number: 96015470"].map(v => (
+                                        <p key={v} className="font-medium">{v}</p>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-xs text-slate-400 italic mb-4 py-2">Bank details will not be printed on the invoice.</div>
+                            )}
+
+                            <div className="mt-2">
                                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Note (optional)</label>
                                 <textarea rows={2} value={invoiceNote} onChange={e => setInvoiceNote(e.target.value)}
                                     placeholder="Add a note for the PDF…"
@@ -313,7 +327,7 @@ export default function InvoicePage() {
                         </div>
                         <div className="flex flex-col items-center md:items-end">
                             <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 flex flex-col items-center bg-white min-w-[190px]">
-                                <img src="/signature.png" alt="Signature" className="max-h-20 object-contain mb-2"
+                                <img src={`data:image/png;base64,${signaturePng}`} alt="Signature" className="max-h-20 object-contain mb-2"
                                     onError={e => { e.target.style.display = "none"; }} />
                                 <div className="w-full border-t border-slate-300 pt-2 text-center">
                                     <p className="text-xs font-bold text-slate-700">Managing Director</p>
