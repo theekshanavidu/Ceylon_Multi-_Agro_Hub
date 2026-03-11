@@ -66,6 +66,11 @@ export default function OldInvoicesPage() {
                 rows: inv.rows || [],
                 grandTotal: inv.grandTotal || 0,
                 invoiceNote: inv.invoiceNote || "",
+                includeBank: inv.includeBank ?? true,
+                includeFreight: inv.includeFreight || false,
+                freightSelection: inv.freightSelection || "Air Freight",
+                freightDesc: inv.freightDesc || "",
+                freightPrice: inv.freightPrice || ""
             });
             const blob = new Blob([pdfBytes], { type: "application/pdf" });
             const url = URL.createObjectURL(blob);

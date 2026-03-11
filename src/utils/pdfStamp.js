@@ -18,7 +18,7 @@ function fmtDate(dateStr) {
     return `${day}${s} ${now.toLocaleDateString("en-GB", { month: "long" })} ${now.getFullYear()}`;
 }
 
-export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote, includeBank = true }) {
+export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote, includeBank = true, includeFreight = false, freightSelection = "Air Freight", freightDesc = "", freightPrice = "" }) {
     /* ── Load template and preserve a pristine copy for pagination ── */
     const tplBytes = b64toUint8(templatePdf);
     const pristineDoc = await PDFDocument.load(tplBytes);
@@ -65,9 +65,25 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
 
     // Overall table width (from 36 up to 560 for a 524pt wide table)
     const TL = LEFT_MARGIN, TR = 560, TW = TR - TL;
-    const W_DESC = 210, W_QTY = 90, W_PRICE = 112, W_SUB = 112;
-    const COL_X = [TL, TL + W_DESC, TL + W_DESC + W_QTY, TL + W_DESC + W_QTY + W_PRICE];
-    const COL_WIDTHS = [W_DESC, W_QTY, W_PRICE, W_SUB];
+    let W_DESC = 210, W_QTY = 90, W_PRICE = 112, W_SUB = 112;
+    let COL_X = [TL, TL + W_DESC, TL + W_DESC + W_QTY, TL + W_DESC + W_QTY + W_PRICE];
+    let COL_WIDTHS = [W_DESC, W_QTY, W_PRICE, W_SUB];
+
+    if (includeFreight) {
+        W_DESC = 180;
+        W_QTY = 70;
+        W_PRICE = 90;
+        W_SUB = 94;
+        let W_FREIGHT = 90;
+        COL_WIDTHS = [W_DESC, W_QTY, W_PRICE, W_SUB, W_FREIGHT];
+        COL_X = [
+            TL,
+            TL + W_DESC,
+            TL + W_DESC + W_QTY,
+            TL + W_DESC + W_QTY + W_PRICE,
+            TL + W_DESC + W_QTY + W_PRICE + W_SUB
+        ];
+    }
 
     /* ══════════════════════════════════════════════════════
        HEADER FORMATTING (Page 1)
@@ -126,6 +142,9 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         p.drawLine({ start: { x: COL_X[1], y: topY }, end: { x: COL_X[1], y: botY }, thickness: BORDER, color: GREEN });
         p.drawLine({ start: { x: COL_X[2], y: topY }, end: { x: COL_X[2], y: botY }, thickness: BORDER, color: GREEN });
         p.drawLine({ start: { x: COL_X[3], y: topY }, end: { x: COL_X[3], y: botY }, thickness: BORDER, color: GREEN });
+        if (includeFreight) {
+            p.drawLine({ start: { x: COL_X[4], y: topY }, end: { x: COL_X[4], y: botY }, thickness: BORDER, color: GREEN });
+        }
     };
 
     const drawTableHeader = (p, topY) => {
@@ -137,8 +156,17 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         cAlign(p, "QTY/KG", COL_X[1], COL_WIDTHS[1], hY1, { size: 10, bold: true });
         cAlign(p, "PRICE", COL_X[2], COL_WIDTHS[2], hY1, { size: 10, bold: true });
         cAlign(p, `${currency}/KG`, COL_X[2], COL_WIDTHS[2], hY2, { size: 10, bold: true });
-        cAlign(p, "SUBTOTAL", COL_X[3], COL_WIDTHS[3], hY1, { size: 10, bold: true });
-        cAlign(p, currency, COL_X[3], COL_WIDTHS[3], hY2, { size: 10, bold: true });
+        
+        if (includeFreight) {
+            cAlign(p, "SUBTOTAL", COL_X[3], COL_WIDTHS[3], hY1, { size: 10, bold: true });
+            cAlign(p, currency, COL_X[3], COL_WIDTHS[3], hY2, { size: 10, bold: true });
+            
+            cAlign(p, (freightSelection || "FREIGHT").toUpperCase(), COL_X[4], COL_WIDTHS[4], hY1, { size: 10, bold: true });
+            cAlign(p, "USD", COL_X[4], COL_WIDTHS[4], hY2, { size: 10, bold: true });
+        } else {
+            cAlign(p, "SUBTOTAL", COL_X[3], COL_WIDTHS[3], hY1, { size: 10, bold: true });
+            cAlign(p, currency, COL_X[3], COL_WIDTHS[3], hY2, { size: 10, bold: true });
+        }
 
         // Solid horizontal line BEFORE header
         p.drawLine({ start: { x: TL, y: topY }, end: { x: TR, y: topY }, thickness: BORDER, color: GREEN });
@@ -150,6 +178,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
 
     drawTableHeader(page, currentY);
     currentY -= HDR_H;
+    const tableDataStartY = currentY;
 
     for (let i = 0; i < dataRows.length; i++) {
         const r = dataRows[i];
@@ -193,6 +222,7 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
             cAlign(page, parseFloat(r.price).toFixed(2), COL_X[2], COL_WIDTHS[2], singleLineTextY, { size: 10 });
         }
         const sub = calcSub(r);
+
         if (sub > 0) cAlign(page, sub.toFixed(2), COL_X[3], COL_WIDTHS[3], singleLineTextY, { size: 10 });
 
         // Make vertical columns
@@ -200,7 +230,8 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
 
         currentY -= currentDynamicRowH;
         // Solid horizontal line after every single item row to separate them clearly
-        page.drawLine({ start: { x: TL, y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });
+        const endHorizontalLineX = includeFreight ? COL_X[4] : TR;
+        page.drawLine({ start: { x: TL, y: currentY }, end: { x: endHorizontalLineX, y: currentY }, thickness: BORDER, color: GREEN });
     }
 
     // Check space for the Total row
@@ -212,16 +243,54 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
     /* ══════════════════════════════════════════════════════
        TOTAL ROW
     ══════════════════════════════════════════════════════ */
+    // Draw freight text just once inside the single spanning cell
+    if (includeFreight && freightDesc) {
+        const words = String(freightDesc).split(" ");
+        let lst = [], cur = "";
+        for (let w of words) {
+            const test = cur ? `${cur} ${w}` : w;
+            if (font.widthOfTextAtSize(test, 10) > COL_WIDTHS[4] - 10 && cur) {
+                lst.push(cur);
+                cur = w;
+            } else cur = test;
+        }
+        if (cur) lst.push(cur);
+        // Start a little bit down from the top of the table
+        lst.forEach((lineText, idx) => {
+            cAlign(page, lineText, COL_X[4], COL_WIDTHS[4], tableDataStartY - 20 - idx * 13, { size: 10 });
+        });
+    }
+
     fillRowBackground(page, currentY, ROW_H);
     const totalY = currentY - 17;
-    cAlign(page, "TOTAL", COL_X[2], COL_WIDTHS[2], totalY, { size: 10, bold: true });
-    cAlign(page, `${(grandTotal || 0).toFixed(2)} ${currency}`, COL_X[3], COL_WIDTHS[3], totalY, { size: 10, bold: true });
+    
+    // Ensure the top line of the Total block spans across the freight column too
+    if (includeFreight) {
+        page.drawLine({ start: { x: COL_X[4], y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });
+    }
+    
+    if (includeFreight) {
+        cAlign(page, "TOTAL", COL_X[2], COL_WIDTHS[2], totalY, { size: 10, bold: true });
+        cAlign(page, `${(grandTotal || 0).toFixed(2)} ${currency}`, COL_X[3], COL_WIDTHS[3], totalY, { size: 10, bold: true });
+        if (freightPrice) {
+            cAlign(page, `${parseFloat(freightPrice || 0).toFixed(2)} USD`, COL_X[4], COL_WIDTHS[4], totalY, { size: 10, bold: true });
+        }
+        
+        page.drawLine({ start: { x: TL, y: currentY }, end: { x: TL, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: TR, y: currentY }, end: { x: TR, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: COL_X[2], y: currentY }, end: { x: COL_X[2], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: COL_X[3], y: currentY }, end: { x: COL_X[3], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: COL_X[4], y: currentY }, end: { x: COL_X[4], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+    } else {
+        cAlign(page, "TOTAL", COL_X[2], COL_WIDTHS[2], totalY, { size: 10, bold: true });
+        cAlign(page, `${(grandTotal || 0).toFixed(2)} ${currency}`, COL_X[3], COL_WIDTHS[3], totalY, { size: 10, bold: true });
 
-    // Vertical columns for Total block
-    page.drawLine({ start: { x: TL, y: currentY }, end: { x: TL, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
-    page.drawLine({ start: { x: TR, y: currentY }, end: { x: TR, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
-    page.drawLine({ start: { x: COL_X[2], y: currentY }, end: { x: COL_X[2], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
-    page.drawLine({ start: { x: COL_X[3], y: currentY }, end: { x: COL_X[3], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        // Vertical columns for Total block
+        page.drawLine({ start: { x: TL, y: currentY }, end: { x: TL, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: TR, y: currentY }, end: { x: TR, y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: COL_X[2], y: currentY }, end: { x: COL_X[2], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+        page.drawLine({ start: { x: COL_X[3], y: currentY }, end: { x: COL_X[3], y: currentY - ROW_H }, thickness: BORDER, color: GREEN });
+    }
 
     currentY -= ROW_H;
     page.drawLine({ start: { x: TL, y: currentY }, end: { x: TR, y: currentY }, thickness: BORDER, color: GREEN });

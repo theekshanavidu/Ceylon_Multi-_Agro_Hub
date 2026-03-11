@@ -33,6 +33,10 @@ export default function InvoicePage() {
     const [saveStatus, setSaveStatus] = useState(null);
     const [invoiceNote, setInvoiceNote] = useState("");
     const [includeBank, setIncludeBank] = useState(true);
+    const [includeFreight, setIncludeFreight] = useState(false);
+    const [freightSelection, setFreightSelection] = useState("Air Freight");
+    const [freightDesc, setFreightDesc] = useState("");
+    const [freightPrice, setFreightPrice] = useState("");
 
     /* Load items */
     useEffect(() => {
@@ -96,6 +100,7 @@ export default function InvoicePage() {
                 issuedTo, date: todayDisplay(), currency,
                 rows: rows.filter(r => r.name || r.qty || r.price),
                 grandTotal, invoiceNote,
+                includeFreight, freightSelection, freightDesc, freightPrice,
                 createdAt: serverTimestamp(),
             });
             setSaveStatus("ok");
@@ -108,7 +113,7 @@ export default function InvoicePage() {
     const handleExportPDF = async () => {
         setPdfBusy(true);
         try {
-            const bytes = await stampPDF({ issuedTo, currency, rows, grandTotal, invoiceNote, includeBank });
+            const bytes = await stampPDF({ issuedTo, date: todayDisplay(), currency, rows, grandTotal, invoiceNote, includeBank, includeFreight, freightSelection, freightDesc, freightPrice });
             const blob = new Blob([bytes], { type: "application/pdf" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -211,14 +216,29 @@ export default function InvoicePage() {
 
                 {/* Table */}
                 <div className="px-6 md:px-10 py-6">
-                    <div className="rounded-xl border border-slate-200">
-                        <table className="w-full text-sm min-w-[600px]">
+                    <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                        <table className="w-full text-sm min-w-[700px]">
                             <thead>
                                 <tr className="bg-gradient-to-r from-green-700 to-emerald-600 text-white">
-                                    <th className="text-center px-4 py-3 font-semibold rounded-tl-xl">DESCRIPTION</th>
+                                    <th className="text-center px-4 py-3 font-semibold rounded-tl-xl w-64">DESCRIPTION</th>
                                     <th className="text-center px-4 py-3 font-semibold w-24">QTY/KG</th>
-                                    <th className="text-center px-4 py-3 font-semibold w-36">PRICE/{currency}/KG</th>
+                                    <th className="text-center px-4 py-3 font-semibold w-32">PRICE/{currency}/KG</th>
                                     <th className="text-center px-4 py-3 font-semibold w-32">SUBTOTAL {currency}</th>
+                                    {includeFreight && (
+                                        <th className="text-center px-4 py-3 font-semibold w-40 border-l border-emerald-500">
+                                            <div className="flex flex-col items-center">
+                                                <select 
+                                                    value={freightSelection}
+                                                    onChange={e => setFreightSelection(e.target.value)}
+                                                    className="bg-transparent text-white font-semibold focus:outline-none cursor-pointer text-sm mb-0.5 text-center"
+                                                >
+                                                    <option value="Air Freight" className="text-slate-800">Air Freight</option>
+                                                    <option value="Sea Freight" className="text-slate-800">Sea Freight</option>
+                                                </select>
+                                                <span className="text-[10px] uppercase opacity-80">(USD)</span>
+                                            </div>
+                                        </th>
+                                    )}
                                     <th className="w-10 rounded-tr-xl"></th>
                                 </tr>
                             </thead>
@@ -266,6 +286,16 @@ export default function InvoicePage() {
                                         <td className="px-4 py-2 text-center font-semibold text-slate-700 font-mono">
                                             {calcSub(row).toFixed(2)}
                                         </td>
+                                        {includeFreight && idx === 0 && (
+                                            <td rowSpan={rows.length} className="px-4 py-2 align-top border-l border-slate-200 bg-white">
+                                                <textarea
+                                                    value={freightDesc}
+                                                    onChange={e => setFreightDesc(e.target.value)}
+                                                    placeholder="Freight Description (optional)"
+                                                    className="w-full h-full min-h-[50px] p-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
+                                                />
+                                            </td>
+                                        )}
                                         <td className="px-2 py-2 text-center">
                                             {rows.length > 1 && (
                                                 <button onClick={() => removeRow(row.id)}
@@ -277,6 +307,22 @@ export default function InvoicePage() {
                                     </tr>
                                 ))}
                             </tbody>
+                            <tfoot>
+                                <tr className="border-t-2 border-slate-200 bg-slate-50">
+                                   <td colSpan={3} className="text-right px-4 py-3 font-bold text-slate-700 uppercase tracking-wide">TOTAL</td>
+                                   <td className="text-center px-4 py-3 font-extrabold text-green-700 font-mono text-base">
+                                       {grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} {currency}
+                                   </td>
+                                   {includeFreight && (
+                                       <td className="px-4 py-3 border-l border-slate-200 bg-white align-middle">
+                                           <input type="number" min="0" step="0.01" value={freightPrice}
+                                                onChange={e => setFreightPrice(e.target.value)} placeholder="Price (USD)"
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-green-300 bg-slate-50 text-center" />
+                                       </td>
+                                   )}
+                                   <td></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
 
@@ -291,6 +337,11 @@ export default function InvoicePage() {
                             <p className="text-2xl font-extrabold text-green-800">
                                 {grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} {currency}
                             </p>
+                            {includeFreight && freightPrice && (
+                                <p className="text-sm font-bold text-slate-600 mt-2">
+                                    + {freightSelection}: {Number(freightPrice).toFixed(2)} USD
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -299,11 +350,15 @@ export default function InvoicePage() {
                 <div className="px-6 md:px-10 pt-4 pb-8 border-t border-slate-100 bg-slate-50">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
                         <div>
-                            <div className="flex items-center gap-2 mb-3">
-                                <h3 className="text-xs font-bold text-green-700 uppercase tracking-widest flex items-center gap-1"><Building size={14} /> Bank Account</h3>
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <h3 className="text-xs font-bold text-green-700 uppercase tracking-widest flex items-center gap-1"><Building size={14} /> Options</h3>
                                 <label className="flex items-center gap-1.5 ml-4 text-xs font-semibold text-slate-600 bg-white px-2 py-1 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-50">
                                     <input type="checkbox" checked={includeBank} onChange={e => setIncludeBank(e.target.checked)} className="accent-green-600 rounded-sm" />
-                                    Include in PDF
+                                    Include Bank Details
+                                </label>
+                                <label className="flex items-center gap-1.5 ml-2 text-xs font-semibold text-slate-600 bg-white px-2 py-1 rounded-md border border-slate-200 cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={includeFreight} onChange={e => setIncludeFreight(e.target.checked)} className="accent-green-600 rounded-sm" />
+                                    Include {freightSelection} Column
                                 </label>
                             </div>
 
