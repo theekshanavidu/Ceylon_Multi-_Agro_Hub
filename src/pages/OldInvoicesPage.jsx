@@ -76,7 +76,7 @@ export default function OldInvoicesPage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `Invoice_${(inv.issuedTo || "").replace(/[^a-zA-Z0-9]/g, "_")}_${inv.date?.replace(/\s/g, "_")}.pdf`;
+            a.download = `${inv.issuedTo || ""}_Ceylon_Multi_Agro_Hub_Invoice.pdf`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (e) { alert("PDF error: " + e.message); }

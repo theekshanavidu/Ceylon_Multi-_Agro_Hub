@@ -118,7 +118,7 @@ export default function InvoicePage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `Invoice_${issuedTo.replace(/[^a-zA-Z0-9]/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            a.download = `${issuedTo}_Ceylon_Multi_Agro_Hub_Invoice.pdf`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (e) {
@@ -138,7 +138,7 @@ export default function InvoicePage() {
                         <FileText className="text-green-600" size={28} />
                         Create Invoice
                     </h1>
-                    <p className="text-slate-500 text-sm mt-1">Ceylon Multi Agro Hub (Pvt) Ltd</p>
+                    <p className="text-slate-500 text-sm mt-1">Ceylon Multi Agro (Pvt) Ltd</p>
                 </div>
                 <div className="flex gap-3 flex-wrap">
                     {/* Save */}
@@ -175,7 +175,7 @@ export default function InvoicePage() {
                 <div className="bg-gradient-to-r from-green-800 to-emerald-700 px-6 md:px-10 py-6 text-white">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
-                            <h2 className="text-xl md:text-2xl font-extrabold tracking-wide uppercase">Ceylon Multi Agro Hub (Pvt) Ltd</h2>
+                            <h2 className="text-xl md:text-2xl font-extrabold tracking-wide uppercase">Ceylon Multi Agro (Pvt) Ltd</h2>
                             <p className="text-emerald-200 text-sm italic mt-0.5">"Rooted in Nature, Growing Ceylon"</p>
                             <p className="text-emerald-100 text-xs mt-1">No. 499/1B, Eldeniya, Kadawatha &nbsp;|&nbsp; ceylon.magro@gmail.com</p>
                             <p className="text-emerald-100 text-xs">+94 778 954 234 &nbsp;|&nbsp; +94 783 221 956 &nbsp;|&nbsp; +94 769 985 212</p>
@@ -364,7 +364,7 @@ export default function InvoicePage() {
 
                             {includeBank ? (
                                 <div className="space-y-1 text-sm text-slate-700 mb-4 p-3 bg-white border border-slate-200 rounded-lg">
-                                    {["Company Name: CEYLON MULTI AGRO HUB (PVT) LTD", "Bank: BOC Bank", "Branch: Kadawatha", "Account Type: Current Account", "Account Number: 96015470"].map(v => (
+                                    {["Company Name: CEYLON MULTI AGRO (PVT) LTD", "Bank: BOC Bank", "Branch: Kadawatha", "Account Type: Current Account", "Account Number: 96015470"].map(v => (
                                         <p key={v} className="font-medium">{v}</p>
                                     ))}
                                 </div>
@@ -385,7 +385,7 @@ export default function InvoicePage() {
                                     onError={e => { e.target.style.display = "none"; }} />
                                 <div className="w-full border-t border-slate-300 pt-2 text-center">
                                     <p className="text-xs font-bold text-slate-700">Managing Director</p>
-                                    <p className="text-[10px] text-slate-400">Ceylon Multi Agro Hub (Pvt) Ltd</p>
+                                    <p className="text-[10px] text-slate-400">Ceylon Multi Agro (Pvt) Ltd</p>
                                 </div>
                             </div>
                         </div>

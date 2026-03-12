@@ -201,8 +201,8 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
 
         const currentDynamicRowH = Math.max(ROW_H, descLines.length * 12 + 10);
 
-        // Maximize first page usage, only add new page if < 40 points from bottom
-        if (currentY - currentDynamicRowH < 40) {
+        // Prevent overlapping with the template's footer.
+        if (currentY - currentDynamicRowH < 150) {
             page = await addNewPage();
             currentY = 600; // Skip letterhead on new page
             drawTableHeader(page, currentY);
@@ -234,8 +234,8 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         page.drawLine({ start: { x: TL, y: currentY }, end: { x: endHorizontalLineX, y: currentY }, thickness: BORDER, color: GREEN });
     }
 
-    // Check space for the Total row
-    if (currentY - ROW_H < 40) {
+    // Check space for the Total row, enforcing boundaries so it doesn't overlap the template's footer
+    if (currentY - ROW_H < 150) {
         page = await addNewPage();
         currentY = 600; // Skip letterhead on new page
     }
@@ -299,16 +299,29 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
        DYNAMIC FOOTER POSITIONING & SIGNATURE
     ══════════════════════════════════════════════════════ */
     // Ensure the Bank Details and Signature (Footer Block) stay together
-    // The footer needs about 130 points of vertical space
-    if (currentY - 130 < 40) {
+    let footerHeight = 0;
+    let estimatedNoteLines = 0;
+    if (invoiceNote && invoiceNote.trim()) {
+        estimatedNoteLines = Math.max(1, Math.ceil(font.widthOfTextAtSize(invoiceNote.trim(), 10) / 300));
+        footerHeight += 14 + (estimatedNoteLines * 14) + 10;
+    }
+    if (includeBank) {
+        footerHeight += 80; // Adjusted for 16pt line height
+    }
+    
+    // The signature block will be placed alongside horizontally.
+    // Need to ensure at least enough space for the signature if Bank Account is disabled.
+    footerHeight = Math.max(footerHeight, 66);
+
+    // 1. Bottom Margin Safety Zone:
+    // Apply conditional Page Break if footer won't fit above the bottom template margin.
+    // Increase threshold to 150 to prevent erasing or overlapping with the template's footer line.
+    if (currentY - 36 - footerHeight < 150) {
         page = await addNewPage();
         currentY = 600; // Skip letterhead on new page
     }
 
     currentY -= 36; // Exact 36pt (0.5 inch) gap below the table's final line
-
-    // Wipe background artifacts if footer falls on a busy background zone
-    page.drawRectangle({ x: LEFT_MARGIN, y: currentY - 140, width: 320, height: 155, color: WHITE });
 
     let blockY = currentY;
 
@@ -322,42 +335,44 @@ export async function stampPDF({ issuedTo, date, currency, rows, grandTotal, inv
         blockY -= (estimatedLines * 14) + 10;
     }
 
+    let topOfBankBlock = blockY;
+
+    // Fix Text Overlap: Minimum height 1.2em (16 points for size 10 font)
     if (includeBank) {
         draw(page, "Bank Account:", LEFT_MARGIN, blockY, { size: 10, bold: true });
-        draw(page, "Company Name: CEYLON MULTI AGRO HUB (PVT) LTD", LEFT_MARGIN, blockY - 15, { size: 10 });
-        draw(page, "Bank: BOC Bank", LEFT_MARGIN, blockY - 29, { size: 10 });
-        draw(page, "Branch: Kadawatha", LEFT_MARGIN, blockY - 43, { size: 10 });
-        draw(page, "Account Type: Current Account", LEFT_MARGIN, blockY - 57, { size: 10 });
-        draw(page, "Account Number: 96015470", LEFT_MARGIN, blockY - 71, { size: 10 });
-        blockY -= 71;
+        draw(page, "Company Name: CEYLON MULTI AGRO (PVT) LTD", LEFT_MARGIN, blockY - 16, { size: 10 });
+        draw(page, "Bank: BOC Bank", LEFT_MARGIN, blockY - 32, { size: 10 });
+        draw(page, "Branch: Kadawatha", LEFT_MARGIN, blockY - 48, { size: 10 });
+        draw(page, "Account Type: Current Account", LEFT_MARGIN, blockY - 64, { size: 10 });
+        draw(page, "Account Number: 96015470", LEFT_MARGIN, blockY - 80, { size: 10 });
+        blockY -= 80;
     }
 
     /* Signature Image */
+    // Place on the right side, horizontally parallel to the Bank Account details
+    const mdText = "Managing Director";
+    const mdW = fontB.widthOfTextAtSize(mdText, 10);
+    
+    // Align horizontally with Bank Account
+    // We position the "Managing Director" text at the bottom line of the bank block
+    const sigTextY = includeBank ? topOfBankBlock - 80 : topOfBankBlock - 66;
+
     try {
         const sigBytes = b64toUint8(signaturePng);
         const sigImg = await pdfDoc.embedPng(sigBytes);
         const dim = sigImg.scaleToFit(110, 52);
-
-        // Aligning explicitly on the right (TR coordinate)
+        
+        // Align explicitly on the right (TR coordinate)
         const sigX = TR - dim.width - 20;
+        
+        // The image goes directly above the text
+        const sigImgY = sigTextY + 14;
 
-        // Align top of the signature image roughly with the top of the block (currentY)
-        const sigImgY = currentY - dim.height - 5;
-
-        page.drawRectangle({ x: sigX - 10, y: sigImgY - 20, width: dim.width + 20, height: dim.height + 40, color: WHITE }); // hide template artifacts
         page.drawImage(sigImg, { x: sigX, y: sigImgY, width: dim.width, height: dim.height });
-
-        const mdText = "Managing Director";
-        const mdW = fontB.widthOfTextAtSize(mdText, 10);
-
-        // Centered directly below the signature image
-        draw(page, mdText, sigX + (dim.width - mdW) / 2, sigImgY - 14, { size: 10, bold: true });
+        draw(page, mdText, sigX + (dim.width - mdW) / 2, sigTextY, { size: 10, bold: true });
     } catch {
-        const mdText = "Managing Director";
-        const mdW = fontB.widthOfTextAtSize(mdText, 10);
-        const backupX = TR - mdW - 40;
-
-        draw(page, mdText, backupX, currentY - 50, { size: 10, bold: true });
+        const sigX = TR - mdW - 40;
+        draw(page, mdText, sigX, sigTextY, { size: 10, bold: true });
     }
 
     /* Return generated raw bytes */
