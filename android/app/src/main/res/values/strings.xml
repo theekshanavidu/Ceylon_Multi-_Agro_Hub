@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ceylon Multi Agro Hub</string>
+    <string name="title_activity_main">Ceylon Multi Agro Hub</string>
+    <string name="package_name">com.ceylonmultiagrohub.app</string>
+    <string name="custom_url_scheme">com.ceylonmultiagrohub.app</string>
+</resources>

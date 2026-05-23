@@ -7,13 +7,13 @@ import { db } from "../firebase";
 import { stampPDF } from "../utils/pdfStamp";
 import {
     History, Trash2, Download, Loader2,
-    FileText, Calendar, DollarSign, RefreshCw,
+    FileText, Calendar, DollarSign, RefreshCw, Pencil,
 } from "lucide-react";
 
 
 
 /* ─────────────── Component ─────────────── */
-export default function OldInvoicesPage() {
+export default function OldInvoicesPage({ onEditInvoice }) {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [pdfBusy, setPdfBusy] = useState(null); // id of busy invoice
@@ -151,16 +151,23 @@ export default function OldInvoicesPage() {
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         <button
+                                            onClick={() => onEditInvoice(inv)}
+                                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-all shadow-sm cursor-pointer"
+                                        >
+                                            <Pencil size={14} />
+                                            Edit
+                                        </button>
+                                        <button
                                             onClick={() => handleDownload(inv)}
                                             disabled={pdfBusy === inv.id}
-                                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-700 hover:bg-green-800 text-white text-sm font-semibold transition-all disabled:opacity-60"
+                                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-700 hover:bg-green-800 text-white text-sm font-semibold transition-all disabled:opacity-60 cursor-pointer"
                                         >
                                             {pdfBusy === inv.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                                             PDF
                                         </button>
                                         <button
                                             onClick={() => setDelConfirm(inv.id)}
-                                            className="p-2 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                            className="p-2 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                                         >
                                             <Trash2 size={16} />
                                         </button>

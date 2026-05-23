@@ -137,11 +137,11 @@ export default function ItemsPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-gradient-to-r from-green-700 to-emerald-600 text-white">
-                                    <th className="text-left px-6 py-4 font-semibold">#</th>
-                                    <th className="text-left px-6 py-4 font-semibold">Item Name</th>
-                                    <th className="text-right px-6 py-4 font-semibold">Price (LKR)</th>
-                                    <th className="text-right px-6 py-4 font-semibold">Price (USD)</th>
-                                    <th className="text-center px-6 py-4 font-semibold">Actions</th>
+                                    <th className="text-left px-3 md:px-6 py-3 md:py-4 font-semibold">#</th>
+                                    <th className="text-left px-3 md:px-6 py-3 md:py-4 font-semibold">Item Name</th>
+                                    <th className="text-right px-3 md:px-6 py-3 md:py-4 font-semibold">Price (LKR)</th>
+                                    <th className="text-right px-3 md:px-6 py-3 md:py-4 font-semibold">Price (USD)</th>
+                                    <th className="text-center px-3 md:px-6 py-3 md:py-4 font-semibold">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -150,25 +150,25 @@ export default function ItemsPage() {
                                         key={item.id}
                                         className={`border-b border-slate-50 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-green-50`}
                                     >
-                                        <td className="px-6 py-4 text-slate-400 font-medium">{idx + 1}</td>
-                                        <td className="px-6 py-4 font-semibold text-slate-800">{item.name}</td>
-                                        <td className="px-6 py-4 text-right text-slate-700 font-mono">
+                                        <td className="px-3 md:px-6 py-3 md:py-4 text-slate-400 font-medium">{idx + 1}</td>
+                                        <td className="px-3 md:px-6 py-3 md:py-4 font-semibold text-slate-800">{item.name}</td>
+                                        <td className="px-3 md:px-6 py-3 md:py-4 text-right text-slate-700 font-mono">
                                             {Number(item.priceLKR).toLocaleString("en-LK", { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td className="px-6 py-4 text-right text-slate-700 font-mono">
+                                        <td className="px-3 md:px-6 py-3 md:py-4 text-right text-slate-700 font-mono">
                                             {Number(item.priceUSD).toFixed(2)}
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-3 md:px-6 py-3 md:py-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
                                                 <button
                                                     onClick={() => openEdit(item)}
-                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                                                 >
                                                     <Pencil size={15} />
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleteConfirm(item.id)}
-                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                                                 >
                                                     <Trash2 size={15} />
                                                 </button>

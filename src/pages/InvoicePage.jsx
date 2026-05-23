@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
     collection, getDocs, addDoc, query, orderBy,
-    serverTimestamp, where, deleteDoc, doc,
+    serverTimestamp, where, deleteDoc, doc, updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { stampPDF } from "../utils/pdfStamp";
 import { signaturePng } from "../assets/signaturePng";
+import logoImg from "../assets/logo.jpg";
 import {
     Plus, Download, FileText, Search, X,
     Loader2, DollarSign, Save, CheckCircle, AlertCircle, Building,
@@ -21,9 +22,10 @@ const emptyRow = () => ({ id: crypto.randomUUID(), name: "", qty: "1", price: ""
 const calcSub = (r) => (parseFloat(r.qty) || 0) * (parseFloat(r.price) || 0);
 
 /* ─────────── Component ─────────── */
-export default function InvoicePage() {
+export default function InvoicePage({ editingInvoice, onClearEdit }) {
     const [currency, setCurrency] = useState("LKR");
-    const [issuedTo, setIssuedTo] = useState("Western Dynamic Shipping (PVT) Ltd - Kelaniya");
+    const [issuedTo, setIssuedTo] = useState("Customer");
+    const [date, setDate] = useState(todayDisplay());
     const [rows, setRows] = useState([emptyRow()]);
     const [allItems, setAllItems] = useState([]);
     const [itemsLoaded, setItemsLoaded] = useState(false);
@@ -37,6 +39,33 @@ export default function InvoicePage() {
     const [freightSelection, setFreightSelection] = useState("Air Freight");
     const [freightDesc, setFreightDesc] = useState("");
     const [freightPrice, setFreightPrice] = useState("");
+
+    /* Populate fields when editing */
+    useEffect(() => {
+        if (editingInvoice) {
+            setCurrency(editingInvoice.currency || "LKR");
+            setIssuedTo(editingInvoice.issuedTo || "Customer");
+            setDate(editingInvoice.date || todayDisplay());
+            setRows(editingInvoice.rows?.length ? editingInvoice.rows : [emptyRow()]);
+            setInvoiceNote(editingInvoice.invoiceNote || "");
+            setIncludeBank(editingInvoice.includeBank ?? true);
+            setIncludeFreight(editingInvoice.includeFreight || false);
+            setFreightSelection(editingInvoice.freightSelection || "Air Freight");
+            setFreightDesc(editingInvoice.freightDesc || "");
+            setFreightPrice(editingInvoice.freightPrice || "");
+        } else {
+            setCurrency("LKR");
+            setIssuedTo("Customer");
+            setDate(todayDisplay());
+            setRows([emptyRow()]);
+            setInvoiceNote("");
+            setIncludeBank(true);
+            setIncludeFreight(false);
+            setFreightSelection("Air Freight");
+            setFreightDesc("");
+            setFreightPrice("");
+        }
+    }, [editingInvoice]);
 
     /* Load items */
     useEffect(() => {
@@ -88,7 +117,7 @@ export default function InvoicePage() {
     const grandTotal = rows.reduce((s, r) => s + calcSub(r), 0);
 
     /* Save Invoice */
-    const handleSave = async () => {
+    const handleSave = async (asNew = false) => {
         setSaveBusy(true);
         setSaveStatus(null);
         try {
@@ -96,13 +125,29 @@ export default function InvoicePage() {
             cutoff.setDate(cutoff.getDate() - 30);
             const old = await getDocs(query(collection(db, "invoices"), where("createdAt", "<", cutoff)));
             await Promise.all(old.docs.map(d => deleteDoc(doc(db, "invoices", d.id))));
-            await addDoc(collection(db, "invoices"), {
-                issuedTo, date: todayDisplay(), currency,
+
+            const invoiceData = {
+                issuedTo,
+                date,
+                currency,
                 rows: rows.filter(r => r.name || r.qty || r.price),
-                grandTotal, invoiceNote,
-                includeFreight, freightSelection, freightDesc, freightPrice,
-                createdAt: serverTimestamp(),
-            });
+                grandTotal,
+                invoiceNote,
+                includeFreight,
+                freightSelection,
+                freightDesc,
+                freightPrice,
+                includeBank,
+            };
+
+            if (editingInvoice && !asNew) {
+                await updateDoc(doc(db, "invoices", editingInvoice.id), invoiceData);
+            } else {
+                await addDoc(collection(db, "invoices"), {
+                    ...invoiceData,
+                    createdAt: serverTimestamp(),
+                });
+            }
             setSaveStatus("ok");
         } catch (e) { console.error("Save:", e); setSaveStatus("err"); }
         setSaveBusy(false);
@@ -113,7 +158,7 @@ export default function InvoicePage() {
     const handleExportPDF = async () => {
         setPdfBusy(true);
         try {
-            const bytes = await stampPDF({ issuedTo, date: todayDisplay(), currency, rows, grandTotal, invoiceNote, includeBank, includeFreight, freightSelection, freightDesc, freightPrice });
+            const bytes = await stampPDF({ issuedTo, date, currency, rows, grandTotal, invoiceNote, includeBank, includeFreight, freightSelection, freightDesc, freightPrice });
             const blob = new Blob([bytes], { type: "application/pdf" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -136,24 +181,56 @@ export default function InvoicePage() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <FileText className="text-green-600" size={28} />
-                        Create Invoice
+                        {editingInvoice ? "Edit Invoice" : "Create Invoice"}
                     </h1>
                     <p className="text-slate-500 text-sm mt-1">Ceylon Multi Agro (Pvt) Ltd</p>
                 </div>
                 <div className="flex gap-3 flex-wrap">
-                    {/* Save */}
-                    <button onClick={handleSave} disabled={saveBusy}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all shadow-lg disabled:opacity-60 text-white ${saveStatus === "ok" ? "bg-emerald-600" : saveStatus === "err" ? "bg-red-500" : "bg-blue-600 hover:bg-blue-700"
+                    {/* Cancel Edit */}
+                    {editingInvoice && (
+                        <button onClick={onClearEdit}
+                            className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md cursor-pointer">
+                            Cancel Edit
+                        </button>
+                    )}
+                    {/* Save / Update Actions */}
+                    {editingInvoice ? (
+                        <>
+                            {/* Update Existing */}
+                            <button onClick={() => handleSave(false)} disabled={saveBusy}
+                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all shadow-lg disabled:opacity-60 text-white cursor-pointer ${
+                                    saveStatus === "ok" ? "bg-emerald-600" : saveStatus === "err" ? "bg-red-500" : "bg-blue-600 hover:bg-blue-700"
+                                }`}>
+                                {saveBusy ? <Loader2 size={18} className="animate-spin" />
+                                    : saveStatus === "ok" ? <CheckCircle size={18} />
+                                        : saveStatus === "err" ? <AlertCircle size={18} />
+                                            : <Save size={18} />}
+                                {saveBusy ? "Updating…" : saveStatus === "ok" ? "Updated!" : saveStatus === "err" ? "Failed!" : "Update Invoice"}
+                            </button>
+
+                            {/* Save as New */}
+                            <button onClick={() => handleSave(true)} disabled={saveBusy}
+                                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-60 cursor-pointer">
+                                <Plus size={18} />
+                                Save as New
+                            </button>
+                        </>
+                    ) : (
+                        /* Standard Save */
+                        <button onClick={() => handleSave(false)} disabled={saveBusy}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-all shadow-lg disabled:opacity-60 text-white cursor-pointer ${
+                                saveStatus === "ok" ? "bg-emerald-600" : saveStatus === "err" ? "bg-red-500" : "bg-blue-600 hover:bg-blue-700"
                             }`}>
-                        {saveBusy ? <Loader2 size={18} className="animate-spin" />
-                            : saveStatus === "ok" ? <CheckCircle size={18} />
-                                : saveStatus === "err" ? <AlertCircle size={18} />
-                                    : <Save size={18} />}
-                        {saveBusy ? "Saving…" : saveStatus === "ok" ? "Saved!" : saveStatus === "err" ? "Failed!" : "Save Invoice"}
-                    </button>
+                            {saveBusy ? <Loader2 size={18} className="animate-spin" />
+                                : saveStatus === "ok" ? <CheckCircle size={18} />
+                                    : saveStatus === "err" ? <AlertCircle size={18} />
+                                        : <Save size={18} />}
+                            {saveBusy ? "Saving…" : saveStatus === "ok" ? "Saved!" : saveStatus === "err" ? "Failed!" : "Save Invoice"}
+                        </button>
+                    )}
                     {/* Export PDF */}
                     <button onClick={handleExportPDF} disabled={pdfBusy}
-                        className="flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-60">
+                        className="flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-lg hover:scale-[1.02] disabled:opacity-60 cursor-pointer">
                         {pdfBusy ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                         {pdfBusy ? "Generating…" : "Export as PDF"}
                     </button>
@@ -174,11 +251,14 @@ export default function InvoicePage() {
                 {/* Letterhead */}
                 <div className="bg-gradient-to-r from-green-800 to-emerald-700 px-6 md:px-10 py-6 text-white">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div>
-                            <h2 className="text-xl md:text-2xl font-extrabold tracking-wide uppercase">Ceylon Multi Agro (Pvt) Ltd</h2>
-                            <p className="text-emerald-200 text-sm italic mt-0.5">"Rooted in Nature, Growing Ceylon"</p>
-                            <p className="text-emerald-100 text-xs mt-1">No. 499/1B, Eldeniya, Kadawatha &nbsp;|&nbsp; ceylon.magro@gmail.com</p>
-                            <p className="text-emerald-100 text-xs">+94 778 954 234 &nbsp;|&nbsp; +94 783 221 956 &nbsp;|&nbsp; +94 769 985 212</p>
+                        <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                            <img src={logoImg} alt="Logo" className="w-16 h-16 rounded-xl object-cover border-2 border-emerald-500/30 bg-white" />
+                            <div>
+                                <h2 className="text-xl md:text-2xl font-extrabold tracking-wide uppercase">Ceylon Multi Agro (Pvt) Ltd</h2>
+                                <p className="text-emerald-200 text-sm italic mt-0.5">"Rooted in Nature, Growing Ceylon"</p>
+                                <p className="text-emerald-100 text-xs mt-1">No. 499/1B, Eldeniya, Kadawatha &nbsp;|&nbsp; ceylon.magro@gmail.com</p>
+                                <p className="text-emerald-100 text-xs">+94 778 954 234 &nbsp;|&nbsp; +94 783 221 956 &nbsp;|&nbsp; +94 769 985 212</p>
+                            </div>
                         </div>
                         <span className="text-4xl font-black tracking-widest text-white/90">INVOICE</span>
                     </div>
@@ -189,7 +269,8 @@ export default function InvoicePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Issued Date</label>
-                            <div className="px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 font-medium">{todayDisplay()}</div>
+                            <input type="text" value={date} onChange={e => setDate(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-green-400" />
                         </div>
                         <div className="sm:col-span-2">
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Issued To</label>
@@ -216,7 +297,8 @@ export default function InvoicePage() {
 
                 {/* Table */}
                 <div className="px-6 md:px-10 py-6">
-                    <div className="rounded-xl border border-slate-200 overflow-x-auto">
+                    {/* Desktop table */}
+                    <div className="hidden md:block rounded-xl border border-slate-200 overflow-x-auto">
                         <table className="w-full text-sm min-w-[700px]">
                             <thead>
                                 <tr className="bg-gradient-to-r from-green-700 to-emerald-600 text-white">
@@ -230,7 +312,7 @@ export default function InvoicePage() {
                                                 <select 
                                                     value={freightSelection}
                                                     onChange={e => setFreightSelection(e.target.value)}
-                                                    className="bg-transparent text-white font-semibold focus:outline-none cursor-pointer text-sm mb-0.5 text-center"
+                                                    className="bg-transparent text-white font-semibold focus:outline-none cursor-pointer text-sm mb-0.5 text-center font-bold"
                                                 >
                                                     <option value="Air Freight" className="text-slate-800">Air Freight</option>
                                                     <option value="Sea Freight" className="text-slate-800">Sea Freight</option>
@@ -299,7 +381,7 @@ export default function InvoicePage() {
                                         <td className="px-2 py-2 text-center">
                                             {rows.length > 1 && (
                                                 <button onClick={() => removeRow(row.id)}
-                                                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer">
                                                     <X size={14} />
                                                 </button>
                                             )}
@@ -325,6 +407,109 @@ export default function InvoicePage() {
                             </tfoot>
                         </table>
                     </div>
+
+                    {/* Mobile card list */}
+                    <div className="space-y-4 md:hidden">
+                        {rows.map((row, idx) => (
+                            <div key={row.id} className="p-4 rounded-xl border border-slate-200 bg-white relative shadow-sm">
+                                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase">Item #{idx + 1}</span>
+                                    {rows.length > 1 && (
+                                        <button onClick={() => removeRow(row.id)}
+                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer">
+                                            <X size={16} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3">
+                                    {/* Description */}
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-500 block mb-1">Description</label>
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300" size={13} />
+                                            <input type="text" value={row.name}
+                                                onChange={e => handleNameChange(row.id, e.target.value)}
+                                                onFocus={e => handleNameChange(row.id, e.target.value)}
+                                                onBlur={() => setTimeout(() => setSuggestions(p => ({ ...p, [row.id]: [] })), 300)}
+                                                placeholder="Search item name…"
+                                                autoComplete="off"
+                                                className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 bg-white" />
+                                            {suggestions[row.id]?.length > 0 && (
+                                                <div className="absolute top-[105%] left-0 z-[100] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-2xl overflow-y-auto max-h-60">
+                                                    {suggestions[row.id].map(item => (
+                                                        <button key={item.id} onMouseDown={(e) => { e.preventDefault(); selectSuggestion(row.id, item); }}
+                                                            className="w-full text-left px-4 py-2.5 hover:bg-green-50 border-b border-slate-50 last:border-0 flex items-center justify-between cursor-pointer">
+                                                            <span className="font-semibold text-slate-800 text-sm pointer-events-none">{item.name}</span>
+                                                            <span className="text-xs text-slate-400 font-mono ml-2 pointer-events-none">
+                                                                {currency === "LKR" ? `LKR ${Number(item.priceLKR).toFixed(2)}` : `USD ${Number(item.priceUSD).toFixed(4)}`}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Qty & Price */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-500 block mb-1">QTY (KG)</label>
+                                            <input type="number" min="0" step="0.01" value={row.qty}
+                                                onChange={e => updateRow(row.id, "qty", e.target.value)} placeholder="0"
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 bg-white text-center" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-500 block mb-1">Price/KG ({currency})</label>
+                                            <input type="number" min="0" step="0.0001" value={row.price}
+                                                onChange={e => updateRow(row.id, "price", e.target.value)} placeholder="0.00"
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 bg-white font-mono text-center" />
+                                        </div>
+                                    </div>
+
+                                    {/* Subtotal */}
+                                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-xs">
+                                        <span className="font-medium text-slate-500">Subtotal:</span>
+                                        <span className="font-bold text-slate-700 font-mono">{currency} {calcSub(row).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Mobile Freight Details */}
+                    {includeFreight && (
+                        <div className="md:hidden mt-4 p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 font-semibold">
+                                    Freight Details
+                                </span>
+                                <select 
+                                    value={freightSelection}
+                                    onChange={e => setFreightSelection(e.target.value)}
+                                    className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded-md text-xs focus:outline-none cursor-pointer border border-slate-200"
+                                >
+                                    <option value="Air Freight">Air Freight</option>
+                                    <option value="Sea Freight">Sea Freight</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500 block mb-1">Freight Description</label>
+                                <textarea
+                                    value={freightDesc}
+                                    onChange={e => setFreightDesc(e.target.value)}
+                                    placeholder="Freight Description (optional)"
+                                    className="w-full p-2 rounded-lg border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none h-16"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500 block mb-1">Freight Price (USD)</label>
+                                <input type="number" min="0" step="0.01" value={freightPrice}
+                                    onChange={e => setFreightPrice(e.target.value)} placeholder="Price (USD)"
+                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-green-300 bg-slate-50 text-center" />
+                            </div>
+                        </div>
+                    )}
 
                     <button onClick={addRow}
                         className="mt-3 flex items-center gap-2 text-sm text-green-700 hover:text-green-900 font-semibold px-2 py-1 rounded-lg hover:bg-green-50 transition-colors">

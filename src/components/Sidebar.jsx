@@ -1,5 +1,6 @@
-import { FileText, PackageCheck, History, Menu, X, Leaf } from "lucide-react";
+import { FileText, PackageCheck, History, Menu, X } from "lucide-react";
 import { useState } from "react";
+import logoImg from "../assets/logo.jpg";
 
 export default function Sidebar({ active, onNavigate }) {
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -15,9 +16,7 @@ export default function Sidebar({ active, onNavigate }) {
             {/* Logo */}
             <div className="px-5 py-6 border-b border-white/10">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-                        <Leaf size={20} className="text-white" />
-                    </div>
+                    <img src={logoImg} alt="Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg flex-shrink-0" />
                     <div>
                         <p className="text-white font-bold text-sm leading-tight">Ceylon Multi</p>
                         <p className="text-white font-bold text-sm leading-tight">Agro Hub</p>
